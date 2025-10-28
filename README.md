@@ -158,5 +158,3 @@ B.Tech, NIT Warangal
 ---
 
 > “Stock prediction is not about certainty — it’s about probability, pattern, and precision.”
-
-```
