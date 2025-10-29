@@ -1,4 +1,4 @@
-# Tesla Stock Price Prediction (ML Project)
+# Top 10 Stocks Price Prediction (ML Project)
 
 This project focuses on building a **machine learning model** to analyze and predict Tesla’s stock price trends using historical market data.  
 It demonstrates **data preprocessing, visualization, and predictive modeling** with various ML algorithms.
