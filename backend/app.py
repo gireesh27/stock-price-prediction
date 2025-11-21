@@ -117,10 +117,10 @@ def fetch_and_save_all_stocks():
     print("\n🔄 Checking US market status...")
 
     if not is_market_open():
-        print("⛔ Market CLOSED — No updates performed.\n")
+        print(" Market CLOSED — No updates performed.\n")
         return
 
-    print("📈 Market is OPEN — Fetching stock updates...\n")
+    print("Market is OPEN — Fetching stock updates...\n")
 
     for symbol in STOCK_LIST:
         try:
@@ -128,14 +128,14 @@ def fetch_and_save_all_stocks():
 
             if candles:
                 insert_many_records(symbol, candles)
-                print(f"✅ Updated: {symbol}")
+                print(f" Updated: {symbol}")
             else:
                 print(f"⚠ No data returned for {symbol}")
 
         except Exception as e:
-            print(f"❌ Error updating {symbol}: {e}")
+            print(f" Error updating {symbol}: {e}")
 
-    print("✅ Market update cycle completed.\n")
+    print(" Market update cycle completed.\n")
 
 
 # ===================================================
