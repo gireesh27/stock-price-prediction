@@ -59,6 +59,89 @@ def is_market_open():
     return market_open <= now.time() <= market_close
 
 
+#Frontend
+# ===================================================
+# API: Get latest prices for all 10 stocks
+# ===================================================
+@app.route("/api/stocks/latest", methods=["GET"])
+def get_latest_stocks():
+    result = []
+    for symbol in STOCK_LIST:
+        coll = db[symbol]
+        doc = coll.find_one({}, sort=[("Date", -1)])
+        if not doc:
+            continue
+
+        price = doc.get("Close", 0)
+        prev = coll.find_one({"Date": {"$lt": doc["Date"]}}, sort=[("Date", -1)])
+        if prev and prev.get("Close") is not None:
+            change = round(price - prev["Close"], 4)
+            percent = round((change / prev["Close"]) * 100, 4)
+        else:
+            change = 0
+            percent = 0
+
+        result.append({
+            "symbol": symbol,
+            "price": price,
+            "change": change,
+            "percent": percent
+        })
+    return jsonify(result), 200
+
+
+
+# ===================================================
+# API: Get specific stock details + predicted price
+# ===================================================
+@app.route("/api/stocks/<symbol>", methods=["GET"])
+def get_stock_detail(symbol):
+    symbol = symbol.upper()
+    coll = db[symbol]
+
+    # Latest candle (closest to current time)
+    doc = coll.find_one({}, sort=[("Date", -1)])
+    if not doc or doc.get("Close") is None:
+        return jsonify({"error": "Symbol not found"}), 404
+
+    last_price = doc["Close"]
+
+    # fallback if model/scaler missing
+    try:
+        model = joblib.load("best_stock_model.pkl")
+        scaler = joblib.load("scaler.pkl")
+    except:
+        return jsonify({
+            "symbol": symbol,
+            "last_price": last_price,
+            "predicted_price": last_price,
+            "timestamp": doc["Date"]
+        }), 200
+
+    # safe feature extraction
+    df = pd.DataFrame([{
+        "Open": doc.get("Open") or 0.0,
+        "High": doc.get("High") or 0.0,
+        "Low": doc.get("Low") or 0.0,
+        "Close": doc.get("Close") or 0.0,
+        "Volume": doc.get("Volume") or 0.0
+    }])
+
+    try:
+        X = scaler.transform(df)
+        pred = model.predict(X)[0]
+        predicted_price = float(pred)
+    except Exception:
+        predicted_price = last_price  # fallback if prediction fails
+
+    return jsonify({
+        "symbol": symbol,
+        "last_price": float(last_price),
+        "predicted_price": predicted_price,
+        "timestamp": doc["Date"]
+    }), 200
+
+
 # ===================================================
 # FETCH FROM RAPID API → Yahoo Finance
 # ===================================================

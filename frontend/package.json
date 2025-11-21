@@ -17,6 +17,7 @@
     "mongoose": "^8.20.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.6",
     "tailwind-variants": "^3.1.1",
     "update": "^0.4.2"
   },
