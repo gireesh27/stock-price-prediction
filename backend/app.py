@@ -1,118 +1,155 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 import requests
 import joblib
-import traceback
 import numpy as np
-import datetime 
+import pandas as pd
 import os
-import pandas as pd
-import pandas as pd
-import numpy as np
+from datetime import datetime, time
+from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
+from db import connect_to_database
+import pytz
+from Models.bulk_insert import insert_many_records
 
-# Initialize Flask app
+# -------------------------
+# Load environment variables
+# -------------------------
+load_dotenv()
+
+RAPID_API_KEY = os.getenv("RAPID_API_KEY")
+RAPID_API_HOST = "apidojo-yahoo-finance-v1.p.rapidapi.com"
+
+STOCK_LIST = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA",
+    "META", "NFLX", "NVDA", "IBM", "ORCL"
+]
+
+if not RAPID_API_KEY:
+    raise Exception("❌ RAPID_API_KEY missing in .env file")
+
+# -------------------------
+# MongoDB Connection
+# -------------------------
+client = connect_to_database()
+db = client["stock-price-prediction"]
+
+# -------------------------
+# Flask App Setup
+# -------------------------
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 API Configuration
-FINNHUB_API_KEY = "d3coi31r01qmnfgekpl0d3coi31r01qmnfgekplg"
-BASE_URL = "https://finnhub.io/api/v1"
 
-# ✅ Load your trained model (no scaler)
-model = joblib.load("best_stock_model.pkl")
+# ===================================================
+# CHECK IF US MARKET (NYSE/NASDAQ) IS OPEN
+# 9:30 AM – 4:00 PM US/Eastern (Mon–Fri)
+# ===================================================
+def is_market_open():
+    est = pytz.timezone("US/Eastern")
+    now = datetime.now(est)
 
-def compute_rsi(series, period=14):
-    """
-    Compute Relative Strength Index (RSI) for a pandas Series of closing prices.
-    Returns a Series of RSI values (0–100).
-    """
-    delta = series.diff()  # price change
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
+    # Monday=0 ... Sunday=6
+    if now.weekday() >= 5:  # Saturday/Sunday
+        return False
 
-    # Calculate exponential moving averages for smoother RSI
-    avg_gain = pd.Series(gain).rolling(window=period, min_periods=1).mean()
-    avg_loss = pd.Series(loss).rolling(window=period, min_periods=1).mean()
+    market_open = time(hour=9, minute=30)
+    market_close = time(hour=16, minute=0)
 
-    rs = avg_gain / (avg_loss + 1e-10)  # avoid division by zero
-    rsi = 100 - (100 / (1 + rs))
+    return market_open <= now.time() <= market_close
 
-    return rsi
 
-# 📈 Route: Get Real-Time Stock Quote
-@app.route("/api/quote")
-def get_quote():
-    symbol = request.args.get("symbol")
-    if not symbol:
-        return jsonify({"error": "Symbol parameter is required"}), 400
+# ===================================================
+# FETCH FROM RAPID API → Yahoo Finance
+# ===================================================
+def fetch_from_rapidapi(symbol: str, range="1d", interval="5m"):
+    url = f"https://{RAPID_API_HOST}/stock/v3/get-chart"
 
-    try:
-        r = requests.get(f"{BASE_URL}/quote", params={"symbol": symbol, "token": FINNHUB_API_KEY})
-        r.raise_for_status()
-        return jsonify(r.json())
-    except Exception as e:
-        print("Quote fetch error:", traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+    params = {
+        "symbol": symbol,
+        "range": range,
+        "interval": interval
+    }
 
-@app.route("/api/predict", methods=["GET"])
-def predict_price():
-    symbol = request.args.get("symbol")
-    if not symbol:
-        return jsonify({"error": "Symbol parameter is required"}), 400
+    headers = {
+        "X-RapidAPI-Key": RAPID_API_KEY,
+        "X-RapidAPI-Host": RAPID_API_HOST
+    }
 
-    try:
-        # 🔹 Load model and scaler
-        if not os.path.exists("best_stock_model.pkl") or not os.path.exists("scaler.pkl"):
-            return jsonify({"error": "Model or scaler not found. Please retrain first."}), 500
+    response = requests.get(url, headers=headers, params=params)
 
-        model = joblib.load("best_stock_model.pkl")
-        scaler = joblib.load("scaler.pkl")
+    if response.status_code == 429:
+        print(f"⚠ Rate Limit Hit → Skipping {symbol}")
+        return None
 
-        # 🔹 Fetch recent data from local CSV for context
-        csv_path = f"data/{symbol}.csv"
-        if not os.path.exists(csv_path):
-            return jsonify({"error": f"No data file found for {symbol}. Please wait for auto-fetch."}), 500
+    data = response.json()
 
-        df = pd.read_csv(csv_path).tail(15)  # last few rows for computing indicators
+    if not data.get("chart", {}).get("result"):
+        print(f"❌ No chart data for {symbol}")
+        return None
 
-        # 🔹 Get latest live quote from Finnhub
-        url = f"{BASE_URL}/quote"
-        params = {"symbol": symbol, "token": FINNHUB_API_KEY}
-        res = requests.get(url, params=params)
-        res.raise_for_status()
-        data = res.json()
+    chart = data["chart"]["result"][0]
+    timestamps = chart["timestamp"]
+    quote = chart["indicators"]["quote"][0]
 
-        # Append the latest quote to compute rolling features
-        new_row = {
-            "Open": data.get("o", 0),
-            "High": data.get("h", 0),
-            "Low": data.get("l", 0),
-            "Close": data.get("c", 0),
-            "Volume": data.get("v", 0),
-            "Adj_Close": data.get("pc", 0)
-        }
-        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    formatted = []
 
-        # 🔹 Recreate features used during training
-        df['return_1'] = df['Close'].pct_change(1)
-        df['rsi_14'] = compute_rsi(df['Close'])
-        df = df.dropna().tail(1)  # take the latest valid row
+    for i, ts in enumerate(timestamps):
+        dt = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
-        X_live = df[['Open', 'High', 'Low', 'Close', 'Volume', 'return_1', 'rsi_14']].values
-        X_scaled = scaler.transform(X_live)
-
-        # 🔹 Predict using trained model
-        prediction = model.predict(X_scaled)[0]
-
-        return jsonify({
-            "symbol": symbol,
-            "predicted_price": round(float(prediction), 2),
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        formatted.append({
+            "date": dt,
+            "open": quote["open"][i],
+            "high": quote["high"][i],
+            "low": quote["low"][i],
+            "close": quote["close"][i],
+            "volume": quote["volume"][i],
+            "adj_close": quote["close"][i],
         })
 
-    except Exception as e:
-        print("❌ Prediction error:", traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+    return formatted
 
+
+# ===================================================
+# AUTO FETCH + SAVE (runs only during market hours)
+# ===================================================
+def fetch_and_save_all_stocks():
+    print("\n🔄 Checking US market status...")
+
+    if not is_market_open():
+        print("⛔ Market CLOSED — No updates performed.\n")
+        return
+
+    print("📈 Market is OPEN — Fetching stock updates...\n")
+
+    for symbol in STOCK_LIST:
+        try:
+            candles = fetch_from_rapidapi(symbol, "1d", "5m")
+
+            if candles:
+                insert_many_records(symbol, candles)
+                print(f"✅ Updated: {symbol}")
+            else:
+                print(f"⚠ No data returned for {symbol}")
+
+        except Exception as e:
+            print(f"❌ Error updating {symbol}: {e}")
+
+    print("✅ Market update cycle completed.\n")
+
+
+# ===================================================
+# BACKGROUND SCHEDULER — Runs every 5 minutes
+# ===================================================
+scheduler = BackgroundScheduler()
+scheduler.add_job(fetch_and_save_all_stocks, "interval", minutes=5)
+scheduler.start()
+
+
+# ===================================================
+# RUN APP
+# ===================================================
 if __name__ == "__main__":
-    app.run(debug=True)
+    print("🚀 Flask backend running with automatic NYSE/NASDAQ market-hour updater...")
+    fetch_and_save_all_stocks()  # Initial fetch on startup
+    app.run(debug=True, use_reloader=False)
