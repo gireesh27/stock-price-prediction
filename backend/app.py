@@ -1,17 +1,19 @@
-from flask import Flask, jsonify
-from flask_cors import CORS
+import os
+import logging
+from datetime import datetime, time
+
+import pytz
 import requests
 import joblib
-import numpy as np
 import pandas as pd
-import os
-from datetime import datetime, time
+from flask import Flask, jsonify
+from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
+
 from db import connect_to_database
-import pytz
 from Models.bulk_insert import insert_many_records
-import logging, sys
+
 # -------------------------
 # Load environment variables
 # -------------------------
@@ -19,6 +21,7 @@ load_dotenv()
 
 RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 RAPID_API_HOST = "apidojo-yahoo-finance-v1.p.rapidapi.com"
+MONGO_URI = os.getenv("MONGODB_URI")
 
 STOCK_LIST = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA",
@@ -26,7 +29,19 @@ STOCK_LIST = [
 ]
 
 if not RAPID_API_KEY:
-    raise Exception(" RAPID_API_KEY missing in .env file")
+    raise Exception("RAPID_API_KEY missing in environment variables")
+if not MONGO_URI:
+    raise Exception("MONGO_URI missing in environment variables")
+
+# -------------------------
+# Logging Setup
+# -------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # -------------------------
 # MongoDB Connection
@@ -40,14 +55,6 @@ db = client["stock-price-prediction"]
 app = Flask(__name__)
 CORS(app)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    stream=sys.stdout,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-
-
 # ===================================================
 # CHECK IF US MARKET (NYSE/NASDAQ) IS OPEN
 # 9:30 AM – 4:00 PM US/Eastern (Mon–Fri)
@@ -56,7 +63,6 @@ def is_market_open():
     est = pytz.timezone("US/Eastern")
     now = datetime.now(est)
 
-    # Monday=0 ... Sunday=6
     if now.weekday() >= 5:  # Saturday/Sunday
         return False
 
@@ -65,10 +71,8 @@ def is_market_open():
 
     return market_open <= now.time() <= market_close
 
-
-#Frontend
 # ===================================================
-# API: Get latest prices for all 10 stocks
+# API: Get latest prices for all stocks
 # ===================================================
 @app.route("/api/stocks/latest", methods=["GET"])
 def get_latest_stocks():
@@ -96,8 +100,6 @@ def get_latest_stocks():
         })
     return jsonify(result), 200
 
-
-
 # ===================================================
 # API: Get specific stock details + predicted price
 # ===================================================
@@ -106,18 +108,16 @@ def get_stock_detail(symbol):
     symbol = symbol.upper()
     coll = db[symbol]
 
-    # Latest candle (closest to current time)
     doc = coll.find_one({}, sort=[("Date", -1)])
     if not doc or doc.get("Close") is None:
         return jsonify({"error": "Symbol not found"}), 404
 
     last_price = doc["Close"]
 
-    # fallback if model/scaler missing
     try:
         model = joblib.load("best_stock_model.pkl")
         scaler = joblib.load("scaler.pkl")
-    except:
+    except Exception:
         return jsonify({
             "symbol": symbol,
             "last_price": last_price,
@@ -125,7 +125,6 @@ def get_stock_detail(symbol):
             "timestamp": doc["Date"]
         }), 200
 
-    # safe feature extraction
     df = pd.DataFrame([{
         "Open": doc.get("Open") or 0.0,
         "High": doc.get("High") or 0.0,
@@ -139,7 +138,7 @@ def get_stock_detail(symbol):
         pred = model.predict(X)[0]
         predicted_price = float(pred)
     except Exception:
-        predicted_price = last_price  # fallback if prediction fails
+        predicted_price = last_price
 
     return jsonify({
         "symbol": symbol,
@@ -148,98 +147,84 @@ def get_stock_detail(symbol):
         "timestamp": doc["Date"]
     }), 200
 
-
 # ===================================================
 # FETCH FROM RAPID API → Yahoo Finance
 # ===================================================
 def fetch_from_rapidapi(symbol: str, range="1d", interval="5m"):
     url = f"https://{RAPID_API_HOST}/stock/v3/get-chart"
+    params = {"symbol": symbol, "range": range, "interval": interval}
+    headers = {"X-RapidAPI-Key": RAPID_API_KEY, "X-RapidAPI-Host": RAPID_API_HOST}
 
-    params = {
-        "symbol": symbol,
-        "range": range,
-        "interval": interval
-    }
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 429:
+            logger.warning(f"Rate Limit Hit → Skipping {symbol}")
+            return None
+        data = response.json()
+        if not data.get("chart", {}).get("result"):
+            logger.warning(f"No chart data for {symbol}")
+            return None
 
-    headers = {
-        "X-RapidAPI-Key": RAPID_API_KEY,
-        "X-RapidAPI-Host": RAPID_API_HOST
-    }
+        chart = data["chart"]["result"][0]
+        timestamps = chart["timestamp"]
+        quote = chart["indicators"]["quote"][0]
 
-    response = requests.get(url, headers=headers, params=params)
-
-    if response.status_code == 429:
-        print(f" Rate Limit Hit → Skipping {symbol}")
+        formatted = []
+        for i, ts in enumerate(timestamps):
+            dt = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+            formatted.append({
+                "date": dt,
+                "open": quote["open"][i],
+                "high": quote["high"][i],
+                "low": quote["low"][i],
+                "close": quote["close"][i],
+                "volume": quote["volume"][i],
+                "adj_close": quote["close"][i],
+            })
+        return formatted
+    except Exception as e:
+        logger.error(f"Error fetching {symbol}: {e}")
         return None
-
-    data = response.json()
-
-    if not data.get("chart", {}).get("result"):
-        print(f" No chart data for {symbol}")
-        return None
-
-    chart = data["chart"]["result"][0]
-    timestamps = chart["timestamp"]
-    quote = chart["indicators"]["quote"][0]
-
-    formatted = []
-
-    for i, ts in enumerate(timestamps):
-        dt = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
-
-        formatted.append({
-            "date": dt,
-            "open": quote["open"][i],
-            "high": quote["high"][i],
-            "low": quote["low"][i],
-            "close": quote["close"][i],
-            "volume": quote["volume"][i],
-            "adj_close": quote["close"][i],
-        })
-
-    return formatted
-
 
 # ===================================================
 # AUTO FETCH + SAVE (runs only during market hours)
 # ===================================================
 def fetch_and_save_all_stocks():
-    print("\n Checking US market status...")
+    logger.info("Checking US market status...")
 
     if not is_market_open():
-        print(" Market CLOSED — No updates performed.\n")
+        logger.info("Market CLOSED — No updates performed.")
         return
 
-    print("Market is OPEN — Fetching stock updates...\n")
+    logger.info("Market OPEN — Fetching stock updates...")
 
     for symbol in STOCK_LIST:
         try:
-            candles = fetch_from_rapidapi(symbol, "1d", "5m")
-
+            candles = fetch_from_rapidapi(symbol)
             if candles:
                 insert_many_records(symbol, candles)
-                print(f" Updated: {symbol}")
+                logger.info(f"Updated: {symbol}")
             else:
-                print(f" No data returned for {symbol}")
-
+                logger.info(f"No data returned for {symbol}")
         except Exception as e:
-            print(f" Error updating {symbol}: {e}")
+            logger.error(f"Error updating {symbol}: {e}")
 
-    print(" Market update cycle completed.\n")
-
-
-# ===================================================
-# BACKGROUND SCHEDULER — Runs every 5 minutes
-# ===================================================
-scheduler = BackgroundScheduler()
-scheduler.add_job(fetch_and_save_all_stocks, "interval", minutes=5)
-scheduler.start()
-
+    logger.info("Market update cycle completed.")
 
 # ===================================================
-# RUN APP
+# Conditional Scheduler
 # ===================================================
-if __name__ == "__main__":
-    print(" Flask backend running with automatic NYSE/NASDAQ market-hour updater...")
-    fetch_and_save_all_stocks()  # Initial fetch on startup
-    app.run(debug=True, use_reloader=False)
+ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "false").lower() == "true"
+
+if ENABLE_SCHEDULER:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(fetch_and_save_all_stocks, "interval", minutes=5)
+    scheduler.start()
+    logger.info("Scheduler started.")
+else:
+    logger.info("Scheduler disabled (free Render instance).")
+
+# ===================================================
+# Export Flask app (for Gunicorn / production)
+# ===================================================
+logger.info("Flask app ready for production.")
