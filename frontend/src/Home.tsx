@@ -20,6 +20,7 @@ export default function Home() {
   useEffect(() => {
     const fetchStocks = async () => {
       try {
+        console.log("API_BASE =", API_BASE);
         const res = await fetch(`${API_BASE}/api/stocks/latest`);
         const data = await res.json();
 
