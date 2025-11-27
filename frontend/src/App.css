@@ -1,126 +1,170 @@
-body {
+/* GLOBAL ------------------------------------------------------------------ */
+
+body { 
   margin: 0;
-  font-family: "Segoe UI", Roboto, sans-serif;
-  background: linear-gradient(135deg, #0f172a, #1e293b, #000);
+  font-family: "Poppins", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #0f172a 10%, #000 80%);
   color: #fff;
   min-height: 100vh;
+  padding: 1rem;
+  overflow-x: hidden;
 }
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+  transition: 0.35s ease;
+}
+
+/* HOME PAGE -------------------------------------------------------------- */
 
 .app-container {
   text-align: center;
-  padding: 3rem 1rem;
+  max-width: 1200px;
+  margin: auto;
 }
 
 .app-title {
-  font-size: 2.5rem;
+  font-size: 2.8rem;
   font-weight: 800;
-  background: linear-gradient(to right, #60a5fa, #a855f7);
+  background: linear-gradient(to right, #8b5cf6, #3b82f6, #06b6d4);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin-bottom: 3rem;
+  margin-bottom: 2.5rem;
 }
 
+/* GRID LAYOUT */
 .stock-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.5rem;
-  justify-content: center;
-  max-width: 1200px;
-  margin: 0 auto;
+  margin-top: 1rem;
 }
 
+/* CARD */
 .stock-card {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  transition: 0.3s;
+  border-radius: 18px;
+  padding: 1.7rem;
 }
 
 .stock-card:hover {
-  border-color: #3b82f6;
-  transform: translateY(-5px);
+  transform: translateY(-8px) scale(1.02);
+  border-color: #60a5fa;
+  box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
 }
 
 .stock-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.8rem;
+  margin-bottom: 1rem;
 }
 
 .symbol {
+  font-size: 1.4rem;
   font-weight: 700;
-  font-size: 1.2rem;
+  letter-spacing: 0.5px;
+}
+
+.stock-info p {
+  margin: 0.3rem 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
 }
 
 .positive {
   color: #4ade80;
+  font-weight: bold;
 }
 
 .negative {
   color: #f87171;
+  font-weight: bold;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
+/* DETAILS PAGE ----------------------------------------------------------- */
 
-.modal {
-  background: linear-gradient(145deg, #1e293b, #0f172a);
-  padding: 2rem;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  width: 90%;
-  max-width: 400px;
+.details-container {
+  max-width: 500px;
+  margin: 2rem auto;
   text-align: center;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
+  padding: 2rem;
 }
 
-.modal h2 {
-  font-size: 2rem;
-  margin-bottom: 1rem;
+.details-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(to right, #3b82f6, #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.details-line {
+  font-size: 1.1rem;
+  margin: 0.7rem 0;
+}
+
+.highlight {
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.highlight.green {
+  color: #4ade80;
+  font-size: 1.2rem;
 }
 
 .predicted {
   margin-top: 1.2rem;
-  color: #4ade80;
-  font-weight: bold;
-  font-size: 1.1rem;
 }
 
-.loading {
-  margin-top: 1.2rem;
-  color: #60a5fa;
-  animation: pulse 1.5s infinite;
+.timestamp {
+  margin-top: 1.4rem;
+  opacity: 0.7;
+  font-size: 0.9rem;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
+/* BUTTON */
+.back-btn {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
 
-.close-btn {
-  margin-top: 1.8rem;
-  padding: 0.6rem 1.5rem;
-  background: #3b82f6;
-  border: none;
-  border-radius: 8px;
+  padding: 0.4rem 1rem;
+  font-size: 1rem;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
   color: white;
-  font-weight: 600;
+  border-radius: 8px;
+
   cursor: pointer;
   transition: 0.3s;
 }
 
-.close-btn:hover {
-  background: #2563eb;
+.back-btn:hover {
+  background: rgba(255,255,255,0.25);
+  transform: scale(1.03);
+}
+
+/* RESPONSIVENESS ---------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .app-title {
+    font-size: 2.2rem;
+  }
+  
+  .details-container {
+    margin-top: 4rem;
+  }
+
+  .back-btn {
+    top: 0.5rem;
+    left: 0.5rem;
+  }
 }

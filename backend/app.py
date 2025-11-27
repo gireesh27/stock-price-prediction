@@ -26,7 +26,7 @@ STOCK_LIST = [
 ]
 
 if not RAPID_API_KEY:
-    raise Exception("❌ RAPID_API_KEY missing in .env file")
+    raise Exception(" RAPID_API_KEY missing in .env file")
 
 # -------------------------
 # MongoDB Connection
@@ -162,13 +162,13 @@ def fetch_from_rapidapi(symbol: str, range="1d", interval="5m"):
     response = requests.get(url, headers=headers, params=params)
 
     if response.status_code == 429:
-        print(f"⚠ Rate Limit Hit → Skipping {symbol}")
+        print(f" Rate Limit Hit → Skipping {symbol}")
         return None
 
     data = response.json()
 
     if not data.get("chart", {}).get("result"):
-        print(f"❌ No chart data for {symbol}")
+        print(f" No chart data for {symbol}")
         return None
 
     chart = data["chart"]["result"][0]
@@ -197,7 +197,7 @@ def fetch_from_rapidapi(symbol: str, range="1d", interval="5m"):
 # AUTO FETCH + SAVE (runs only during market hours)
 # ===================================================
 def fetch_and_save_all_stocks():
-    print("\n🔄 Checking US market status...")
+    print("\n Checking US market status...")
 
     if not is_market_open():
         print(" Market CLOSED — No updates performed.\n")
@@ -213,7 +213,7 @@ def fetch_and_save_all_stocks():
                 insert_many_records(symbol, candles)
                 print(f" Updated: {symbol}")
             else:
-                print(f"⚠ No data returned for {symbol}")
+                print(f" No data returned for {symbol}")
 
         except Exception as e:
             print(f" Error updating {symbol}: {e}")
@@ -233,6 +233,6 @@ scheduler.start()
 # RUN APP
 # ===================================================
 if __name__ == "__main__":
-    print("🚀 Flask backend running with automatic NYSE/NASDAQ market-hour updater...")
+    print(" Flask backend running with automatic NYSE/NASDAQ market-hour updater...")
     fetch_and_save_all_stocks()  # Initial fetch on startup
     app.run(debug=True, use_reloader=False)

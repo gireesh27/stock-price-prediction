@@ -8,13 +8,13 @@ export default function StockDetails() {
 
   const [stock, setStock] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
+  const API_BASE = import.meta.env.VITE_API_URL;
   useEffect(() => {
     if (!symbol) return;
 
     const loadStock = async () => {
       try {
-        const res = await fetch(`/api/stocks/${symbol}`);
+        const res = await fetch(`${API_BASE}/api/stocks/${symbol}`);
         const data = await res.json();
 
         if (data.error) {
@@ -41,21 +41,25 @@ export default function StockDetails() {
   if (loading || !stock) return <p>Loading...</p>;
 
   return (
-    <div className="details-container">
+    <div className="details-container glass-card">
       <button onClick={() => navigate("/")} className="back-btn">
         ← Back
       </button>
 
-      <h1>{stock.symbol}</h1>
+      <h1 className="details-title">{stock.symbol}</h1>
 
-      <p> Current Price: ${stock.price.toFixed(2)}</p>
+      <p className="details-line">
+        💰 Current Price:
+        <span className="highlight">${stock.price.toFixed(2)}</span>
+      </p>
 
-      <p className="predicted">
-         Predicted Price: ${stock.predicted.toFixed(2)}
+      <p className="details-line predicted">
+        📈 Predicted Price:
+        <span className="highlight green">${stock.predicted.toFixed(2)}</span>
       </p>
 
       <p className="timestamp">
-        Updated At: {new Date(stock.timestamp).toLocaleString()}
+        ⏱ Updated: {new Date(stock.timestamp).toLocaleString()}
       </p>
     </div>
   );
