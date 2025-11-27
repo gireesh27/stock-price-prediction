@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from db import connect_to_database
 import pytz
 from Models.bulk_insert import insert_many_records
-
+import logging, sys
 # -------------------------
 # Load environment variables
 # -------------------------
@@ -39,6 +39,13 @@ db = client["stock-price-prediction"]
 # -------------------------
 app = Flask(__name__)
 CORS(app)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    stream=sys.stdout,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 
 # ===================================================
