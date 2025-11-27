@@ -10,7 +10,6 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-
 from db import connect_to_database
 from Models.bulk_insert import insert_many_records
 
@@ -53,7 +52,7 @@ db = client["stock-price-prediction"]
 # Flask App Setup
 # -------------------------
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://stock-price-prediction-2-wls6.onrender.com"])
 
 # ===================================================
 # CHECK IF US MARKET (NYSE/NASDAQ) IS OPEN
