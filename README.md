@@ -1,150 +1,169 @@
-# Top 10 Stocks Price Prediction (ML Project)
 
-This project focuses on building a **machine learning model** to analyze and predict Tesla’s stock price trends using historical market data.  
-It demonstrates **data preprocessing, visualization, and predictive modeling** with various ML algorithms.
+# Top 10 Stocks Price Prediction (ML + Flask + MongoDB)
 
----
+This project builds a **machine learning model** to predict stock prices for the **top 10 companies** (AAPL, MSFT, GOOGL, AMZN, TSLA, META, NFLX, NVDA, IBM, ORCL) using historical market data.
 
-## 🧾 Dataset Overview
+It demonstrates **data preprocessing, ML modeling, API integration, and real-time stock fetching** using RapidAPI, Flask, and MongoDB.
 
-- **Company:** Tesla Inc. (TSLA)
-- **Time Range:** June 29, 2010 → March 17, 2017  
-- **Records:** 1,693 rows  
-- **Columns:**
-  | Column | Description |
-  |:--------|:-------------|
-  | Date | Trading day |
-  | Open | Opening price (USD) |
-  | High | Highest price of the day |
-  | Low | Lowest price of the day |
-  | Close | Closing price (USD) |
-  | Adj Close | Adjusted closing price |
-  | Volume | Number of shares traded |
 
----
+##  Dataset Overview
 
-## ⚙️ Libraries Used
+* **Companies:** AAPL, MSFT, GOOGL, AMZN, TSLA, META, NFLX, NVDA, IBM, ORCL
+* **Data Source:** Yahoo Finance via RapidAPI or CSV files
+* **Columns:**
+
+| Column    | Description              |
+| --------- | ------------------------ |
+| Date      | Trading day              |
+| Open      | Opening price (USD)      |
+| High      | Highest price of the day |
+| Low       | Lowest price of the day  |
+| Close     | Closing price (USD)      |
+| Adj Close | Adjusted closing price   |
+| Volume    | Number of shares traded  |
+
+
+##  Libraries Used
 
 ```python
-import numpy as np
+import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sb
-
-from sklearn.model_selection import train_test_split
+import joblib
+import requests
+import pytz
+from flask import Flask, jsonify
+from flask_cors import CORS
+from apscheduler.schedulers.background import BackgroundScheduler
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from xgboost import XGBClassifier
-from sklearn import metrics
-````
+from sklearn.model_selection import train_test_split
+from xgboost import XGBRegressor
+```
 
----
 
 ## 🚀 Project Workflow
 
-1. **Import Dependencies** – Load required libraries for data manipulation, visualization, and modeling.
-2. **Load Dataset** – Read Tesla historical price data (`tesla_stock.csv`).
-3. **Preprocessing** – Handle missing data, convert dates, normalize features.
-4. **EDA (Exploratory Data Analysis)** –
+1. **Load Dataset & API Setup** – Historical data CSV or RapidAPI connection.
+2. **Data Preprocessing** – Handle missing values, convert date formats, scale features.
+3. **Feature Engineering** – Moving averages, daily returns, high-low spreads.
+4. **Exploratory Data Analysis (EDA)** –
 
-   * Visualize trends in closing price
-   * Analyze correlations using Seaborn heatmaps and line plots
-5. **Feature Engineering** – Create additional indicators like daily returns or moving averages.
-6. **Model Training** –
+   * Price trends
+   * Correlation heatmaps
+   * Volume analysis
+5. **Machine Learning Model** – Train XGBoost regression or other models per stock.
+6. **Model Evaluation** – MSE, RMSE, R², visual comparison of predicted vs actual prices.
+7. **API Deployment** – Flask app provides endpoints:
 
-   * Split data into training/testing sets
-   * Train multiple models (Logistic Regression, SVM, XGBoost)
-7. **Evaluation** –
-
-   * Compare performance using metrics like Accuracy, Precision, Recall, and F1-score
-   * Visualize confusion matrices and classification reports
+   * `/api/stocks/latest` → Get latest stock prices with change %
+   * `/api/stocks/<symbol>` → Get specific stock details + predicted price
+   * `/api/fetch-now` → Fetch real-time prices from RapidAPI and update MongoDB
+8. **Database Integration** – MongoDB stores historical & fetched stock data.
 
 ---
 
 ## 🧠 Machine Learning Models
 
-| Model                           | Description                                          |
-| :------------------------------ | :--------------------------------------------------- |
-| Logistic Regression             | Baseline linear model                                |
-| SVC (Support Vector Classifier) | Non-linear kernel-based model                        |
-| XGBClassifier                   | Boosted decision trees, efficient for large datasets |
+| Model            | Purpose                         |
+| ---------------- | ------------------------------- |
+| XGBRegressor     | Predict continuous stock prices |
+| StandardScaler   | Feature scaling for ML models   |
+| Train/Test Split | Model evaluation and validation |
 
 ---
 
-## 📊 Visualizations
+##  Visualizations
 
-* Tesla closing price over time
-* Moving average trends
+* Historical closing price trends per stock
+* Moving averages and volatility
+* Predicted vs actual price plots
 * Correlation heatmaps
-* Predicted vs actual price classifications
 
 ---
 
-## 📈 Results Summary
-
-* The **XGBoost Classifier** showed the best generalization and prediction accuracy.
-* Effective at capturing non-linear patterns and stock momentum.
-* Demonstrated improvement after feature scaling and tuning.
-
----
-
-## 🧩 Folder Structure
+##  Folder Structure
 
 ```
-📦 tesla-stock-price-prediction
-├── tesla_stock.csv
-├── tesla_model.ipynb
-├── README.md
+stock-price-prediction
+├── app.py                 # Flask API server
+├── db.py                  # MongoDB connection
+├── Models/
+│   └── bulk_insert.py     # Helper to insert records
+├── requirements.txt
+├── tesla_stock.csv        # Example historical data
+├── best_stock_model.pkl   # Trained ML model
+├── scaler.pkl             # Scaler for preprocessing
+└── README.md
 ```
 
 ---
 
-## ⚡ How to Run
+##  How to Run Locally
 
-1. Clone the repository:
+1. Clone the repo:
 
-   ```bash
-   git clone https://github.com/yourusername/tesla-stock-price-prediction.git
-   cd tesla-stock-price-prediction
-   ```
+```bash
+git clone https://github.com/gireesh27/stock-price-prediction.git
+cd stock-price-prediction
+```
 
 2. Install dependencies:
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-3. Open and run the notebook:
+3. Set environment variables in `.env`:
 
-   ```bash
-   jupyter notebook notebooks/tesla_model.ipynb
-   ```
+```
+MONGODB_URI=your_mongodb_uri
+RAPID_API_KEY=your_rapidapi_key
+```
+
+4. Run the Flask server:
+
+```bash
+python app.py
+```
+
+5. Access API endpoints:
+
+   * Latest prices → `http://127.0.0.1:5000/api/stocks/latest`
+   * Specific stock → `http://127.0.0.1:5000/api/stocks/AAPL`
+   * Fetch real-time → `http://127.0.0.1:5000/api/fetch-now`
 
 ---
 
-## 🧮 Requirements
+##  Requirements
 
-Create a `requirements.txt` with the following:
-
-```
-numpy
+```text
+flask
+flask-cors
 pandas
+numpy
 matplotlib
 seaborn
 scikit-learn
 xgboost
-jupyter
+joblib
+pytz
+requests
+python-dotenv
+pymongo
+apscheduler
 ```
 
 ---
 
-## 📚 Future Enhancements
+##  Future Enhancements
 
-* Use regression models (LSTM, GRU) for continuous price prediction
-* Incorporate real-time API data from Yahoo Finance
-* Add interactive dashboards using Plotly or Streamlit
-* Perform hyperparameter optimization using GridSearchCV
+* Add LSTM/GRU for sequence-based stock prediction
+* Deploy interactive dashboard using Streamlit or Plotly
+* Add real-time WebSocket updates for stock prices
+* Hyperparameter tuning for ML models using GridSearchCV
+* Scale to larger stock universe beyond top 10
 
 ---
 
@@ -152,7 +171,7 @@ jupyter
 
 **Gireesh Kasa**
 B.Tech, NIT Warangal
-📧 [[kasagireesh@gmail.com](mailto:kasagireesh@gmail.com]
+📧 [kasagireesh@gmail.com](mailto:kasagireesh@gmail.com)
 🔗 [LinkedIn](https://linkedin.com/in/gireesh-kasa-33a546250/) | [GitHub](https://github.com/gireesh27)
 
 ---
