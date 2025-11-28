@@ -206,23 +206,32 @@ def fetch_and_save_all_stocks():
 
     logger.info("Market update cycle completed.")
 
+@app.route("/api/fetch-now")
+def fetch_now():
+    fetch_and_save_all_stocks()
+    return {"status": "success", "updated": True}
+
 # ===================================================
 # Conditional Scheduler (local dev)
 # ===================================================
-ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() == "true"
+# ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() == "true"
 
-if ENABLE_SCHEDULER:
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(fetch_and_save_all_stocks, "interval", minutes=5)
-    scheduler.start()
-    logger.info("Scheduler started.")
-else:
-    logger.info("Scheduler disabled.")
+# if ENABLE_SCHEDULER:
+#     scheduler = BackgroundScheduler()
+#     scheduler.add_job(fetch_and_save_all_stocks, "interval", minutes=5)
+#     scheduler.start()
+#     logger.info("Scheduler started.")
+# else:
+#     logger.info("Scheduler disabled.")
 
 # ===================================================
 # RUN LOCALHOST FLASK SERVER
 # ===================================================
 if __name__ == "__main__":
-    logger.info("Starting Flask server on http://127.0.0.1:5000")
-    fetch_and_save_all_stocks()  # initial fetch
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    logger.info("Starting Flask server")
+
+    # # Do NOT run fetch in production
+    # if os.getenv("RENDER") != "true":
+    #     fetch_and_save_all_stocks()
+
+    app.run(host="0.0.0.0", port=5000)

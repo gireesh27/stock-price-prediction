@@ -8,7 +8,7 @@ export default function StockDetails() {
 
   const [stock, setStock] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const API_BASE = import.meta.env.VITE_API_URL;
+  const API_BASE = import.meta.env.VITE_API_URL
   useEffect(() => {
     if (!symbol) return;
 
@@ -49,12 +49,12 @@ export default function StockDetails() {
       <h1 className="details-title">{stock.symbol}</h1>
 
       <p className="details-line">
-        💰 Current Price:
+         Current Price:
         <span className="highlight">${stock.price.toFixed(2)}</span>
       </p>
 
       <p className="details-line predicted">
-        📈 Predicted Price:
+         Predicted Price:
         <span className="highlight green">${stock.predicted.toFixed(2)}</span>
       </p>
 

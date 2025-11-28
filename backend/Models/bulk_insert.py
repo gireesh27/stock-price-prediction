@@ -15,7 +15,7 @@ def insert_many_records(symbol, records):
     """
 
     if not isinstance(records, list) or len(records) == 0:
-        print("⚠️ No records to insert")
+        print(" No records to insert")
         return
 
     collection = db[symbol.upper()]  # collection per stock (AAPL, TSLA, etc.)
@@ -41,12 +41,12 @@ def insert_many_records(symbol, records):
             formatted_docs.append(doc)
 
         except Exception as e:
-            print(f"⚠️ Skipped a record: {e}")
+            print(f" Skipped a record: {e}")
 
     # Bulk Insert (skip duplicates)
     try:
         result = collection.insert_many(formatted_docs, ordered=False)
-        print(f"✅ Inserted {len(result.inserted_ids)} new records into {symbol}")
+        print(f" Inserted {len(result.inserted_ids)} new records into {symbol}")
 
     except BulkWriteError:
-        print(f"⚠️ Duplicate timestamps skipped for {symbol}. Others inserted.")
+        print(f" Duplicate timestamps skipped for {symbol}. Others inserted.")
