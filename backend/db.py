@@ -1,12 +1,12 @@
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
-load_dotenv()  
+load_dotenv()
+
 MONGODB_URI = os.getenv("MONGODB_URI")
 if not MONGODB_URI:
-    raise Exception(" Please define MONGODB_URI in your environment variables")
+    raise Exception("Please define MONGODB_URI in your environment variables")
 
-# Cache the client to avoid new connections on every import
 _client = None
 
 def connect_to_database():
@@ -16,9 +16,14 @@ def connect_to_database():
         return _client
 
     try:
-        _client = MongoClient(MONGODB_URI)
-        print(" MongoDB Connected")
+        _client = MongoClient(
+            MONGODB_URI,
+            tls=True,
+            tlsAllowInvalidCertificates=True  # IMPORTANT for Render
+        )
+        print("MongoDB Connected")
         return _client
+
     except Exception as e:
-        print(" MongoDB connection failed:", e)
+        print("MongoDB connection failed:", e)
         raise e

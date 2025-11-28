@@ -4,7 +4,6 @@ from db import connect_to_database
 from datetime import datetime
 from pymongo.errors import BulkWriteError
 
-# DB Connection
 client = connect_to_database()
 db = client["stock-price-prediction"]
 
@@ -15,38 +14,41 @@ def insert_many_records(symbol, records):
     """
 
     if not isinstance(records, list) or len(records) == 0:
-        print(" No records to insert")
+        print(f"[{symbol}] No records to insert")
         return
 
-    collection = db[symbol.upper()]  # collection per stock (AAPL, TSLA, etc.)
+    collection = db[symbol.upper()]
 
     formatted_docs = []
 
     for rec in records:
         try:
-            # Convert string → datetime
             date_obj = datetime.strptime(rec["date"], "%Y-%m-%d %H:%M:%S")
 
             doc = {
-                "_id": date_obj,      # unique timestamp (5min candle)
+                "_id": date_obj,
                 "Date": date_obj,
                 "Open": float(rec["open"]),
                 "High": float(rec["high"]),
                 "Low": float(rec["low"]),
                 "Close": float(rec["close"]),
-                "Volume": int(rec["volume"]),
+                "Volume": int(rec["volume"] or 0),  # <-- FIXED
                 "Adj_Close": float(rec.get("adj_close", rec["close"])),
             }
 
             formatted_docs.append(doc)
 
         except Exception as e:
-            print(f" Skipped a record: {e}")
+            print(f"[{symbol}] Skipped record {rec} → {e}")
 
-    # Bulk Insert (skip duplicates)
+    # Prevent insert_many([]) error
+    if not formatted_docs:
+        print(f"[{symbol}] No valid records to insert")
+        return
+
     try:
         result = collection.insert_many(formatted_docs, ordered=False)
-        print(f" Inserted {len(result.inserted_ids)} new records into {symbol}")
+        print(f"[{symbol}] Inserted {len(result.inserted_ids)} new records")
 
     except BulkWriteError:
-        print(f" Duplicate timestamps skipped for {symbol}. Others inserted.")
+        print(f"[{symbol}] Duplicate timestamps skipped. Others inserted.")
