@@ -189,27 +189,42 @@ def fetch_and_save_all_stocks():
 
     if not is_market_open():
         logger.info("Market CLOSED — No updates performed.")
-        return
+        return {
+            "status": "closed",
+            "message": "US Market is closed. No updates performed.",
+            "data": None
+        }
 
     logger.info("Market OPEN — Fetching stock updates...")
+
+    updated_data = {}
 
     for symbol in STOCK_LIST:
         try:
             candles = fetch_from_rapidapi(symbol)
             if candles:
                 insert_many_records(symbol, candles)
+                updated_data[symbol] = candles  # include response
                 logger.info(f"Updated: {symbol}")
             else:
-                logger.info(f"No data returned for {symbol}")
+                updated_data[symbol] = "No data returned"
         except Exception as e:
+            updated_data[symbol] = f"Error: {str(e)}"
             logger.error(f"Error updating {symbol}: {e}")
 
     logger.info("Market update cycle completed.")
 
+    return {
+        "status": "success",
+        "market_open": True,
+        "updated_symbols": list(updated_data.keys()),
+        "data": updated_data
+    }
+
 @app.route("/api/fetch-now")
 def fetch_now():
-    fetch_and_save_all_stocks()
-    return {"status": "success", "updated": True}
+    result = fetch_and_save_all_stocks()
+    return jsonify(result), 200
 
 # ===================================================
 # Conditional Scheduler (local dev)
