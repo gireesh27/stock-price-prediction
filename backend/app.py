@@ -52,22 +52,18 @@ db = client["stock-price-prediction"]
 # Flask App Setup
 # -------------------------
 app = Flask(__name__)
-CORS(app, origins=["https://stock-price-prediction-2-wls6.onrender.com"])
+CORS(app)  # Allow all origins for local dev
 
 # ===================================================
 # CHECK IF US MARKET (NYSE/NASDAQ) IS OPEN
-# 9:30 AM – 4:00 PM US/Eastern (Mon–Fri)
 # ===================================================
 def is_market_open():
     est = pytz.timezone("US/Eastern")
     now = datetime.now(est)
-
-    if now.weekday() >= 5:  # Saturday/Sunday
+    if now.weekday() >= 5:
         return False
-
     market_open = time(hour=9, minute=30)
     market_close = time(hour=16, minute=0)
-
     return market_open <= now.time() <= market_close
 
 # ===================================================
@@ -211,9 +207,9 @@ def fetch_and_save_all_stocks():
     logger.info("Market update cycle completed.")
 
 # ===================================================
-# Conditional Scheduler
+# Conditional Scheduler (local dev)
 # ===================================================
-ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "false").lower() == "true"
+ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() == "true"
 
 if ENABLE_SCHEDULER:
     scheduler = BackgroundScheduler()
@@ -221,9 +217,12 @@ if ENABLE_SCHEDULER:
     scheduler.start()
     logger.info("Scheduler started.")
 else:
-    logger.info("Scheduler disabled (free Render instance).")
+    logger.info("Scheduler disabled.")
 
 # ===================================================
-# Export Flask app (for Gunicorn / production)
+# RUN LOCALHOST FLASK SERVER
 # ===================================================
-logger.info("Flask app ready for production.")
+if __name__ == "__main__":
+    logger.info("Starting Flask server on http://127.0.0.1:5000")
+    fetch_and_save_all_stocks()  # initial fetch
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

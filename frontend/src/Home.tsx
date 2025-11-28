@@ -15,15 +15,16 @@ interface Stock {
 export default function Home() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const navigate = useNavigate();
-  const API_BASE = import.meta.env.VITE_API_URL;
+  const API_BASE = import.meta.env.VITE_API_URL
 
   useEffect(() => {
     const fetchStocks = async () => {
       try {
         console.log("API_BASE =", API_BASE);
+
         const res = await fetch(`${API_BASE}/api/stocks/latest`);
         const data = await res.json();
-
+        console.log("Data: ",data);
         const formatted = data.map((item: any) => ({
           symbol: item.symbol,
           price: item.price,
