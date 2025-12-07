@@ -1,7 +1,7 @@
 import os
 import logging
-from datetime import datetime, time
-import pytz
+import io
+from datetime import datetime
 import requests
 import joblib
 import pandas as pd
@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 from threading import Thread
 from db import connect_to_database
 from Models.bulk_insert import insert_many_records
+import gridfs
+
+from retrain_module import STOCK_LIST, retrain_from_mongo, LOOKBACK_DAYS
 
 # -------------------------
 # Load environment variables
@@ -21,16 +24,10 @@ RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 RAPID_API_HOST = "apidojo-yahoo-finance-v1.p.rapidapi.com"
 MONGO_URI = os.getenv("MONGODB_URI")
 
-STOCK_LIST = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA",
-    "META", "NFLX", "NVDA", "IBM", "ORCL"
-]
-
 if not RAPID_API_KEY:
     raise Exception("RAPID_API_KEY missing")
 if not MONGO_URI:
     raise Exception("MONGO_URI missing")
-
 
 # -------------------------
 # Logging Setup
@@ -42,13 +39,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # -------------------------
 # MongoDB Connection
 # -------------------------
 client = connect_to_database()
 db = client["stock-price-prediction"]
-
+fs = gridfs.GridFS(db)  # GridFS for model/scaler
 
 # -------------------------
 # Flask App Setup
@@ -56,11 +52,28 @@ db = client["stock-price-prediction"]
 app = Flask(__name__)
 CORS(app)
 
+# ===================================================
+# Helper: Load model + scaler from GridFS
+# ===================================================
+def load_model_from_gridfs():
+    try:
+        model_file = fs.find_one({"filename": "best_stock_model.pkl"})
+        scaler_file = fs.find_one({"filename": "scaler.pkl"})
+        if not model_file or not scaler_file:
+            logger.warning("Model or scaler not found in GridFS")
+            return None, None
+
+        model = joblib.load(io.BytesIO(model_file.read()))
+        scaler = joblib.load(io.BytesIO(scaler_file.read()))
+        return model, scaler
+
+    except Exception as e:
+        logger.error("Error loading model from GridFS: %s", e)
+        return None, None
 
 # ===================================================
 # API: Get latest stock prices
 # ===================================================
-# using data from database
 @app.route("/api/stocks/latest", methods=["GET"])
 def get_latest_stocks():
     result = []
@@ -89,11 +102,9 @@ def get_latest_stocks():
 
     return jsonify(result), 200
 
-
 # ===================================================
 # API: Get stock detail + predicted price
 # ===================================================
-# using data from database
 @app.route("/api/stocks/<symbol>", methods=["GET"])
 def get_stock_detail(symbol):
     symbol = symbol.upper()
@@ -105,10 +116,8 @@ def get_stock_detail(symbol):
 
     last_price = doc["Close"]
 
-    try:
-        model = joblib.load("best_stock_model.pkl")
-        scaler = joblib.load("scaler.pkl")
-    except:
+    model, scaler = load_model_from_gridfs()
+    if not model or not scaler:
         return jsonify({
             "symbol": symbol,
             "last_price": last_price,
@@ -126,7 +135,8 @@ def get_stock_detail(symbol):
     try:
         X = scaler.transform(df)
         predicted_price = float(model.predict(X)[0])
-    except:
+    except Exception as e:
+        logger.error("Prediction error: %s", e)
         predicted_price = last_price
 
     return jsonify({
@@ -135,11 +145,9 @@ def get_stock_detail(symbol):
         "predicted_price": predicted_price
     }), 200
 
-
 # ===================================================
-# FETCH FROM RAPIDAPI (5-min candles)
+# Fetch stock data from RapidAPI
 # ===================================================
-# Inserting into Database
 def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
     url = f"https://{RAPID_API_HOST}/stock/v3/get-chart"
     params = {"symbol": symbol, "range": range, "interval": interval}
@@ -147,13 +155,11 @@ def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
 
     try:
         response = requests.get(url, headers=headers, params=params)
-
         if response.status_code == 429:
             logger.warning(f"Rate Limit Hit → {symbol}")
             return None
 
         data = response.json()
-
         if not data.get("chart", {}).get("result"):
             logger.warning(f"No chart data for {symbol}")
             return None
@@ -161,13 +167,11 @@ def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
         chart = data["chart"]["result"][0]
         timestamps = chart["timestamp"]
         quote_list = chart.get("indicators", {}).get("quote", [])
-
         if not quote_list:
             logger.warning(f"No quote data for {symbol}")
             return None
 
         quote = quote_list[0]
-
         formatted = []
         for i, ts in enumerate(timestamps):
             dt = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
@@ -180,59 +184,54 @@ def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
                 "volume": quote["volume"][i],
                 "adj_close": quote["close"][i],
             })
-
         return formatted
 
     except Exception as e:
         logger.error(f"Fetch error {symbol}: {e}")
         return None
 
-
 # ===================================================
-# FETCH + SAVE ALL STOCKS
+# Fetch + Save all stocks + retrain
 # ===================================================
 def fetch_and_save_all_stocks():
     logger.info("Market ALWAYS OPEN — Fetching...")
-
     updated = []
 
     for symbol in STOCK_LIST:
         try:
             candles = fetch_from_rapidapi(symbol)
-
             if candles:
                 insert_many_records(symbol, candles)
                 updated.append(symbol)
-                print(f"Updated {symbol}")
+                logger.info(f"Updated {symbol}")
             else:
-                print(f"No data for {symbol}")
-
+                logger.info(f"No data for {symbol}")
         except Exception as e:
             logger.error(f"Update error {symbol}: {e}")
 
-    return {
-        "status": "success",
-        "market_open": True,
-        "updated_symbols": updated
-    }
+    if updated:
+        # Trigger retrain in background immediately after insertion
+        logger.info("Starting background retrain after data insert...")
+        Thread(target=retrain_from_mongo, kwargs={"days": LOOKBACK_DAYS}).start()
 
+    return {"status": "success", "market_open": True, "updated_symbols": updated}
 
 # ===================================================
 # /api/fetch-now
 # ===================================================
-
 @app.route("/api/fetch-now")
 def fetch_now():
     Thread(target=fetch_and_save_all_stocks).start()
-
     return jsonify({
         "status": "started",
-        "message": "Fetch started in background."
+        "message": "Fetch started in background. Model retrain will start automatically after insert."
     }), 200
 
 # ===================================================
-# Run server
+# Run Flask server + optional retrain at startup
 # ===================================================
 if __name__ == "__main__":
-    logger.info("Starting Flask server...")
-    app.run(host="0.0.0.0", port=5000)
+    logger.info("Starting retrain on startup...")
+    retrain_from_mongo(days=LOOKBACK_DAYS)
+    logger.info("Retrain complete. Starting Flask server...")
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
