@@ -58,24 +58,9 @@ CORS(app)
 
 
 # ===================================================
-# CHECK IF US MARKET IS OPEN
-# ===================================================
-def is_market_open():
-    est = pytz.timezone("US/Eastern")
-    now = datetime.now(est)
-
-    if now.weekday() >= 5:
-        return False
-
-    market_open = time(9, 30)
-    market_close = time(16, 0)
-
-    return market_open <= now.time() <= market_close
-
-
-# ===================================================
 # API: Get latest stock prices
 # ===================================================
+# using data from database
 @app.route("/api/stocks/latest", methods=["GET"])
 def get_latest_stocks():
     result = []
@@ -108,6 +93,7 @@ def get_latest_stocks():
 # ===================================================
 # API: Get stock detail + predicted price
 # ===================================================
+# using data from database
 @app.route("/api/stocks/<symbol>", methods=["GET"])
 def get_stock_detail(symbol):
     symbol = symbol.upper()
@@ -153,6 +139,7 @@ def get_stock_detail(symbol):
 # ===================================================
 # FETCH FROM RAPIDAPI (5-min candles)
 # ===================================================
+# Inserting into Database
 def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
     url = f"https://{RAPID_API_HOST}/stock/v3/get-chart"
     params = {"symbol": symbol, "range": range, "interval": interval}
@@ -205,17 +192,7 @@ def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
 # FETCH + SAVE ALL STOCKS
 # ===================================================
 def fetch_and_save_all_stocks():
-    logger.info("Checking market status...")
-
-    if not is_market_open():
-        logger.info("Market CLOSED")
-        return {
-            "status": "closed",
-            "market_open": False,
-            "updated_symbols": []
-        }
-
-    logger.info("Market OPEN — Fetching...")
+    logger.info("Market ALWAYS OPEN — Fetching...")
 
     updated = []
 
