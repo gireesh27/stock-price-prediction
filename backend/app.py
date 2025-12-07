@@ -153,7 +153,7 @@ def get_stock_detail(symbol):
 # ===================================================
 # FETCH FROM RAPIDAPI (5-min candles)
 # ===================================================
-def fetch_from_rapidapi(symbol, range="1d", interval="5m"):
+def fetch_from_rapidapi(symbol, range="1mo", interval="5m"):
     url = f"https://{RAPID_API_HOST}/stock/v3/get-chart"
     params = {"symbol": symbol, "range": range, "interval": interval}
     headers = {"X-RapidAPI-Key": RAPID_API_KEY, "X-RapidAPI-Host": RAPID_API_HOST}
