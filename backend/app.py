@@ -59,12 +59,26 @@ def load_model_from_gridfs():
     try:
         model_file = fs.find_one({"filename": "best_stock_model.pkl"})
         scaler_file = fs.find_one({"filename": "scaler.pkl"})
+
+        if not model_file:
+            logger.warning("best_stock_model.pkl not found in GridFS")
+        if not scaler_file:
+            logger.warning("scaler.pkl not found in GridFS")
+
         if not model_file or not scaler_file:
-            logger.warning("Model or scaler not found in GridFS")
             return None, None
 
-        model = joblib.load(io.BytesIO(model_file.read()))
-        scaler = joblib.load(io.BytesIO(scaler_file.read()))
+        # Load model
+        model_bytes = io.BytesIO(model_file.read())
+        model_bytes.seek(0)
+        model = joblib.load(model_bytes)
+
+        # Load scaler
+        scaler_bytes = io.BytesIO(scaler_file.read())
+        scaler_bytes.seek(0)
+        scaler = joblib.load(scaler_bytes)
+
+        logger.info("Successfully loaded model and scaler from GridFS")
         return model, scaler
 
     except Exception as e:
@@ -106,24 +120,32 @@ def get_latest_stocks():
 # API: Get stock detail + predicted price
 # ===================================================
 @app.route("/api/stocks/<symbol>", methods=["GET"])
+# ===================================================
+# API: Get stock detail + predicted price
+# ===================================================
+@app.route("/api/stocks/<symbol>", methods=["GET"])
 def get_stock_detail(symbol):
     symbol = symbol.upper()
     coll = db[symbol]
 
+    # Fetch latest stock data
     doc = coll.find_one({}, sort=[("Date", -1)])
     if not doc:
         return jsonify({"error": "Not found"}), 404
 
-    last_price = doc["Close"]
+    last_price = doc.get("Close", 0.0)
 
+    # Load model and scaler from GridFS
     model, scaler = load_model_from_gridfs()
     if not model or not scaler:
+        logger.warning("Using last price as predicted price (model/scaler missing)")
         return jsonify({
             "symbol": symbol,
-            "last_price": last_price,
-            "predicted_price": last_price
+            "last_price": float(last_price),
+            "predicted_price": float(last_price)
         })
 
+    # Prepare dataframe for prediction
     df = pd.DataFrame([{
         "Open": doc.get("Open") or 0.0,
         "High": doc.get("High") or 0.0,
@@ -134,7 +156,15 @@ def get_stock_detail(symbol):
 
     try:
         X = scaler.transform(df)
-        predicted_price = float(model.predict(X)[0])
+        predicted_class = int(model.predict(X)[0])
+
+        # Convert classifier output (0/1) into approximate price change
+        # Using last price ± 1% as a simple estimate
+        if predicted_class == 1:
+            predicted_price = last_price * 1.01  # +1%
+        else:
+            predicted_price = last_price * 0.99  # -1%
+
     except Exception as e:
         logger.error("Prediction error: %s", e)
         predicted_price = last_price
@@ -142,8 +172,9 @@ def get_stock_detail(symbol):
     return jsonify({
         "symbol": symbol,
         "last_price": float(last_price),
-        "predicted_price": predicted_price
+        "predicted_price": round(predicted_price, 2)  # rounded to 2 decimals
     }), 200
+
 
 # ===================================================
 # Fetch stock data from RapidAPI

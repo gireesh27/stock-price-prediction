@@ -30,9 +30,9 @@ export default function Home() {
           price: item.price,
           change: item.change,
           changePercent: item.percent,
-          high: item.high ?? 0,
-          low: item.low ?? 0,
-          volume: item.volume ?? 0,
+          high: item.high ,
+          low: item.low ,
+          volume: item.volume,
         }));
 
         setStocks(formatted);
@@ -46,7 +46,7 @@ export default function Home() {
 
   return (
     <div className="app-container">
-      <h1 className="app-title">Trending Stocks - Top 10</h1>
+      <h1 className="app-title">10 Stocks List</h1>
 
       <div className="stock-grid">
         {stocks.map((s) => (

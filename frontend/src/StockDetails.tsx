@@ -50,16 +50,16 @@ export default function StockDetails() {
 
       <p className="details-line">
          Current Price:
-        <span className="highlight">${stock.price.toFixed(2)}</span>
+        <span className="highlight">${stock.price.toFixed(4)}</span>
       </p>
 
       <p className="details-line predicted">
          Predicted Price:
-        <span className="highlight green">${stock.predicted.toFixed(2)}</span>
+        <span className="highlight green">${stock.predicted.toFixed(4)}</span>
       </p>
 
       <p className="timestamp">
-        ⏱ Updated: {new Date(stock.timestamp).toLocaleString()}
+         Updated: {new Date(stock.timestamp).toLocaleString()}
       </p>
     </div>
   );
