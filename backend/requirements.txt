@@ -11,4 +11,3 @@ python-dotenv
 pymongo
 pytz
 gunicorn
-threading
