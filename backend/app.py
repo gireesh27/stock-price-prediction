@@ -8,7 +8,7 @@ import pandas as pd
 from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-
+from threading import Thread
 from db import connect_to_database
 from Models.bulk_insert import insert_many_records
 
@@ -220,16 +220,15 @@ def fetch_and_save_all_stocks():
 # ===================================================
 # /api/fetch-now
 # ===================================================
+
 @app.route("/api/fetch-now")
 def fetch_now():
-    result = fetch_and_save_all_stocks()
+    Thread(target=fetch_and_save_all_stocks).start()
 
-    print("\n================= FETCH NOW =================")
-    print(result)
-    print("============================================\n")
-
-    return jsonify(result), 200
-
+    return jsonify({
+        "status": "started",
+        "message": "Fetch started in background."
+    }), 200
 
 # ===================================================
 # Run server
