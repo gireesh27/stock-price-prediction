@@ -120,10 +120,6 @@ def get_latest_stocks():
 # API: Get stock detail + predicted price
 # ===================================================
 @app.route("/api/stocks/<symbol>", methods=["GET"])
-# ===================================================
-# API: Get stock detail + predicted price
-# ===================================================
-@app.route("/api/stocks/<symbol>", methods=["GET"])
 def get_stock_detail(symbol):
     symbol = symbol.upper()
     coll = db[symbol]
@@ -145,26 +141,19 @@ def get_stock_detail(symbol):
             "predicted_price": float(last_price)
         })
 
-    # Prepare dataframe for prediction
-    df = pd.DataFrame([{
-        "Open": doc.get("Open") or 0.0,
-        "High": doc.get("High") or 0.0,
-        "Low": doc.get("Low") or 0.0,
-        "Close": doc.get("Close") or 0.0,
-        "Volume": doc.get("Volume") or 0.0
-    }])
+    # Prepare dataframe for prediction using the same features used in training
+    feature_cols = [
+        'Open', 'High', 'Low', 'Close', 'Volume'
+        # Add any other features used in training: returns, SMA, EMA, etc.
+    ]
+
+    df = pd.DataFrame([{col: doc.get(col, 0.0) for col in feature_cols}])
 
     try:
-        X = scaler.transform(df)
-        predicted_class = int(model.predict(X)[0])
-
-        # Convert classifier output (0/1) into approximate price change
-        # Using last price ± 1% as a simple estimate
-        if predicted_class == 1:
-            predicted_price = last_price * 1.01  # +1%
-        else:
-            predicted_price = last_price * 0.99  # -1%
-
+        # Scale features
+        X_scaled = scaler.transform(df)
+        # Predict next closing price
+        predicted_price = float(model.predict(X_scaled)[0])
     except Exception as e:
         logger.error("Prediction error: %s", e)
         predicted_price = last_price
@@ -174,6 +163,7 @@ def get_stock_detail(symbol):
         "last_price": float(last_price),
         "predicted_price": round(predicted_price, 2)  # rounded to 2 decimals
     }), 200
+
 
 
 # ===================================================
